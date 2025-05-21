@@ -815,4 +815,488 @@
                 let p2 = this.getPointAt(t2);
                 
                 // Width varies along path
-                let segWidth = this.
+                let segWidth = this.thickness * (0.5 + sketch.sin(t1 * sketch.PI + sketch.frameCount * 0.02) * 0.5);
+                
+                sketch.stroke(this.boostTimer > 0 ? colors.paths.highlight : colors.paths.base);
+                sketch.strokeWeight(segWidth);
+                sketch.line(p1.x, p1.y, p2.x, p2.y);
+              }
+              break;
+              
+            case 'time':
+              // Gate visualization
+              for (let gate of this.gates) {
+                let p = this.getPointAt(gate.position);
+                let tangent = this.getTangentAt(gate.position);
+                let normal = sketch.createVector(-tangent.y, tangent.x).normalize();
+                
+                // Gate opens and closes periodically
+                sketch.push();
+                sketch.translate(p.x, p.y);
+                sketch.rotate(sketch.atan2(tangent.y, tangent.x) + sketch.HALF_PI);
+                
+                // Draw gate
+                sketch.rectMode(sketch.CENTER);
+                if (gate.isOpen) {
+                  sketch.fill(colors.paths.highlight);
+                  sketch.noStroke();
+                  sketch.rect(0, 0, this.thickness * 0.8, this.thickness * 0.8);
+                } else {
+                  sketch.fill(colors.paths.base);
+                  sketch.noStroke();
+                  sketch.rect(0, 0, this.thickness * 1.5, this.thickness * 0.8);
+                }
+                sketch.pop();
+              }
+              break;
+              
+            case 'inventory':
+              // Color filter visualization
+              for (let filter of this.filters) {
+                let p = this.getPointAt(filter.position);
+                let tangent = this.getTangentAt(filter.position);
+                
+                sketch.push();
+                sketch.translate(p.x, p.y);
+                sketch.rotate(sketch.atan2(tangent.y, tangent.x) + sketch.HALF_PI);
+                
+                // Draw color filter
+                sketch.noStroke();
+                sketch.fill(filter.color);
+                sketch.circle(0, 0, this.thickness * 1.2);
+                
+                // Draw filter symbol
+                sketch.fill(255, 200);
+                sketch.textAlign(sketch.CENTER, sketch.CENTER);
+                sketch.textSize(this.thickness * 0.5);
+                sketch.text("✓", 0, 0);
+                sketch.pop();
+              }
+              break;
+          }
+        };
+        
+        this.getPointAt = function(t) {
+          // Quadratic Bezier curve
+          let mt = 1 - t;
+          let x = mt*mt * this.start.x + 2*mt*t * this.control.x + t*t * this.end.x;
+          let y = mt*mt * this.start.y + 2*mt*t * this.control.y + t*t * this.end.y;
+          return sketch.createVector(x, y);
+        };
+        
+        this.getTangentAt = function(t) {
+          // Derivative of quadratic Bezier
+          let mt = 1 - t;
+          let x = 2 * (mt * (this.control.x - this.start.x) + t * (this.end.x - this.control.x));
+          let y = 2 * (mt * (this.control.y - this.start.y) + t * (this.end.y - this.control.y));
+          return sketch.createVector(x, y).normalize();
+        };
+        
+        this.getNormalAt = function(t) {
+          let tangent = this.getTangentAt(t);
+          return sketch.createVector(-tangent.y, tangent.x);
+        };
+        
+        this.getNearestPoint = function(point) {
+          // Find nearest point on path using simple sampling
+          let minDist = Infinity;
+          let nearest = null;
+          let nearestT = 0;
+          
+          for (let t = 0; t <= 1; t += 0.05) {
+            let p = this.getPointAt(t);
+            let d = p5.Vector.dist(p, point);
+            
+            if (d < minDist) {
+              minDist = d;
+              nearest = p;
+              nearestT = t;
+            }
+          }
+          
+          return {
+            point: nearest,
+            distance: minDist,
+            t: nearestT
+          };
+        };
+        
+        this.getWidthAt = function(t) {
+          // For rate constraint path
+          if (this.type === 'rate') {
+            return this.baseWidth * (0.5 + sketch.sin(t * sketch.PI + sketch.frameCount * 0.02) * 0.5);
+          }
+          return 1.0;
+        };
+        
+        this.getFilterAt = function(t) {
+          // For inventory constraint path
+          if (this.type === 'inventory') {
+            for (let filter of this.filters) {
+              if (Math.abs(t - filter.position) < 0.05) {
+                return filter.color;
+              }
+            }
+          }
+          return null;
+        };
+        
+        this.moveControlPoint = function(x, y) {
+          this.control.x = x;
+          this.control.y = y;
+          this.interactionCount++;
+        };
+        
+        this.boost = function() {
+          this.boostTimer = 60; // 1 second boost at 60fps
+          this.interactionCount++;
+        };
+      }
+      
+      // Particle class
+      function Particle(color) {
+        this.position = sourcePos.copy();
+        this.velocity = sketch.createVector(0, 0);
+        this.acceleration = sketch.createVector(0, 0);
+        this.maxSpeed = 2;
+        this.color = color;
+        this.size = particleSize;
+        this.currentPath = null;
+        this.pathPosition = 0;
+        
+        this.display = function() {
+          sketch.fill(this.color);
+          sketch.noStroke();
+          sketch.circle(this.position.x, this.position.y, this.size);
+          
+          // Add a glow effect
+          sketch.fill(this.color + '30');
+          sketch.circle(this.position.x, this.position.y, this.size * 1.5);
+        };
+        
+        this.applyForce = function(force) {
+          this.acceleration.add(force);
+        };
+      }
+      
+      function handleStart(event) {
+        interactionStart = { x: event.x, y: event.y };
+        interactionTarget = findInteractionTarget(event.x, event.y);
+      }
+      
+      function handleMove(event) {
+        if (interactionTarget) {
+          if (interactionTarget.type === 'path') {
+            // Move path control point
+            let path = paths[interactionTarget.id];
+            path.moveControlPoint(event.x, event.y);
+            path.interactionCount++;
+          } else if (interactionTarget.type === 'slider') {
+            // Update flow slider value
+            flowSlider.value = sketch.constrain(
+              sketch.map(event.x, sketch.width/4, sketch.width*3/4, 0.1, 1), 
+              0.1, 1
+            );
+          }
+        }
+      }
+      
+      function handleEnd() {
+        // Check if it was a tap (not a drag)
+        if (interactionTarget && interactionStart) {
+          let dx = interactionTarget.x - interactionStart.x;
+          let dy = interactionTarget.y - interactionStart.y;
+          let distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < 10 && interactionTarget.type === 'path') {
+            // It was a tap, boost the path
+            paths[interactionTarget.id].boost();
+          }
+        }
+        
+        interactionTarget = null;
+        interactionStart = null;
+      }
+      
+      function findInteractionTarget(x, y) {
+        // Check slider first
+        if (y > sketch.height - 80 && y < sketch.height - 20 && 
+            x > sketch.width/4 && x < sketch.width*3/4) {
+          return {
+            type: 'slider',
+            x: x,
+            y: y
+          };
+        }
+        
+        // Check paths
+        for (let i = 0; i < paths.length; i++) {
+          let result = paths[i].getNearestPoint({ x, y });
+          if (result.distance < pathThickness * 1.5) {
+            return {
+              type: 'path',
+              id: i,
+              x: x,
+              y: y
+            };
+          }
+        }
+        
+        return null;
+      }
+    });
+    
+    // UI Control Functions
+    function startGame() {
+      document.getElementById('instruction-screen').style.display = 'none';
+      document.getElementById('game-screen').style.display = 'flex';
+      document.getElementById('result-screen').style.display = 'none';
+      document.getElementById('metrics').style.display = 'block';
+      
+      // Reset game state
+      particles = [];
+      completedParticles = [];
+      flowSlider.value = 0.5;
+      
+      for (let path of paths) {
+        path.interactionCount = 0;
+        path.particlesPassed = 0;
+        path.particlesPassedByColor = {
+          [colors.particles.blue]: 0,
+          [colors.particles.green]: 0,
+          [colors.particles.red]: 0,
+          [colors.particles.yellow]: 0
+        };
+      }
+      
+      playerMetrics = {
+        pathPreference: [0, 0, 0],
+        bottleneckResponsiveness: 0,
+        experimentalIndex: 0,
+        flowRateHistory: [],
+        inventoryHistory: [],
+        pathInteractionHistory: [[], [], []],
+        timepoints: []
+      };
+      
+      startTime = p5Instance.millis();
+      gameActive = true;
+      gameTime = 0;
+    }
+    
+    function endGame() {
+      gameActive = false;
+      document.getElementById('game-screen').style.display = 'none';
+      document.getElementById('result-screen').style.display = 'flex';
+      document.getElementById('metrics').style.display = 'none';
+      
+      // Calculate final metrics
+      calculateResults();
+      
+      // Create charts
+      createFlowChart();
+      createPathUsageChart();
+    }
+    
+    function calculateResults() {
+      // Calculate adaptability (responsiveness to bottlenecks)
+      let adaptabilityScore = Math.min(100, playerMetrics.bottleneckResponsiveness * 25);
+      document.getElementById('adaptability-value').textContent = adaptabilityScore + '%';
+      
+      // Calculate experimentation (variance in path usage)
+      let totalInteractions = playerMetrics.pathPreference.reduce((a, b) => a + b, 0);
+      if (totalInteractions > 0) {
+        let avgInteraction = totalInteractions / 3;
+        let variance = playerMetrics.pathPreference.reduce((sum, val) => sum + Math.pow(val - avgInteraction, 2), 0) / 3;
+        let std = Math.sqrt(variance);
+        let experimentationScore = Math.min(100, Math.max(0, 100 - (std / avgInteraction) * 50));
+        document.getElementById('experimentation-value').textContent = experimentationScore + '%';
+      } else {
+        document.getElementById('experimentation-value').textContent = '0%';
+      }
+      
+      // Calculate efficiency (flow rate)
+      let maxRate = Math.max(...playerMetrics.flowRateHistory);
+      let avgRate = playerMetrics.flowRateHistory.reduce((a, b) => a + b, 0) / playerMetrics.flowRateHistory.length;
+      let efficiencyScore = Math.min(100, avgRate * 20);
+      document.getElementById('efficiency-value').textContent = efficiencyScore + '%';
+      
+      // Calculate balance (evenness of path usage)
+      let maxPathUsage = Math.max(...playerMetrics.pathPreference);
+      let minPathUsage = Math.min(...playerMetrics.pathPreference);
+      let balanceScore = 0;
+      if (maxPathUsage > 0) {
+        balanceScore = Math.min(100, (minPathUsage / maxPathUsage) * 100);
+      }
+      document.getElementById('balance-value').textContent = balanceScore + '%';
+    }
+    
+    function createFlowChart() {
+      // Create flow rate and inventory chart
+      const ctx = document.getElementById('flowChart').getContext('2d');
+      
+      // Sample the data to reduce points if necessary
+      let sampleSize = Math.max(1, Math.floor(playerMetrics.timepoints.length / 50));
+      let sampledTime = [];
+      let sampledFlow = [];
+      let sampledInventory = [];
+      
+      for (let i = 0; i < playerMetrics.timepoints.length; i += sampleSize) {
+        sampledTime.push(playerMetrics.timepoints[i]);
+        sampledFlow.push(playerMetrics.flowRateHistory[i]);
+        sampledInventory.push(playerMetrics.inventoryHistory[i]);
+      }
+      
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: sampledTime.map(t => Math.floor(t) + 's'),
+          datasets: [
+            {
+              label: 'Flow Rate',
+              data: sampledFlow,
+              borderColor: '#8e44ad',
+              backgroundColor: 'rgba(142, 68, 173, 0.1)',
+              tension: 0.4,
+              yAxisID: 'y'
+            },
+            {
+              label: 'Inventory',
+              data: sampledInventory,
+              borderColor: '#2ecc71',
+              backgroundColor: 'rgba(46, 204, 113, 0.1)',
+              tension: 0.4,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Flow Rate and Inventory Over Time'
+            }
+          },
+          scales: {
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              title: {
+                display: true,
+                text: 'Flow Rate'
+              }
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              title: {
+                display: true,
+                text: 'Inventory'
+              },
+              grid: {
+                drawOnChartArea: false
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    function createPathUsageChart() {
+      // Create path usage chart
+      const ctx = document.getElementById('pathUsageChart').getContext('2d');
+      
+      // Sample the data
+      let sampleSize = Math.max(1, Math.floor(playerMetrics.timepoints.length / 50));
+      let sampledTime = [];
+      let sampledPath1 = [];
+      let sampledPath2 = [];
+      let sampledPath3 = [];
+      
+      for (let i = 0; i < playerMetrics.timepoints.length; i += sampleSize) {
+        sampledTime.push(playerMetrics.timepoints[i]);
+        sampledPath1.push(playerMetrics.pathInteractionHistory[0][i] || 0);
+        sampledPath2.push(playerMetrics.pathInteractionHistory[1][i] || 0);
+        sampledPath3.push(playerMetrics.pathInteractionHistory[2][i] || 0);
+      }
+      
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: sampledTime.map(t => Math.floor(t) + 's'),
+          datasets: [
+            {
+              label: 'Path 1 (Rate)',
+              data: sampledPath1,
+              borderColor: '#3498db',
+              backgroundColor: 'rgba(52, 152, 219, 0.1)',
+              tension: 0.4
+            },
+            {
+              label: 'Path 2 (Time)',
+              data: sampledPath2,
+              borderColor: '#e74c3c',
+              backgroundColor: 'rgba(231, 76, 60, 0.1)',
+              tension: 0.4
+            },
+            {
+              label: 'Path 3 (Inventory)',
+              data: sampledPath3,
+              borderColor: '#f1c40f',
+              backgroundColor: 'rgba(241, 196, 15, 0.1)',
+              tension: 0.4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            title: {
+              display: true,
+              text: 'Path Interactions Over Time'
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Interactions'
+              }
+            }
+          }
+        }
+      });
+    }
+    
+    // Helper functions
+    function mean(array) {
+      return array.reduce((a, b) => a + b, 0) / array.length;
+    }
+    
+    function standardDeviation(array) {
+      const avg = mean(array);
+      const squareDiffs = array.map(value => Math.pow(value - avg, 2));
+      const avgSquareDiff = mean(squareDiffs);
+      return Math.sqrt(avgSquareDiff);
+    }
+    
+    // Set up event listeners
+    document.addEventListener('DOMContentLoaded', function() {
+      // Show appropriate controls based on device
+      if (/Mobi|Android/i.test(navigator.userAgent)) {
+        document.getElementById('controls-desktop').style.display = 'none';
+      } else {
+        document.getElementById('controls-mobile').style.display = 'none';
+      }
+      
+      // Add button event listeners
+      document.getElementById('start-button').addEventListener('click', startGame);
+      document.getElementById('replay-button').addEventListener('click', startGame);
+    });
+  </script>
+</body>
+</html>
