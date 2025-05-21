@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Whispers in the Garden</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chart.js/3.7.0/chart.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      overflow: hidden;
+      background-color: #f9f7f0;
+    }
+    #p5Canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 10;
+    }
+    .screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background-color: rgba(249, 247, 240, 0.95);
+      z-index: 20;
+      padding: 2rem;
+      text-align: center;
+    }
+    .screen h1 {
+      color: #34495e;
+      margin-bottom: 1.5rem;
+      font-size: 2rem;
+    }
+    .screen p {
+      color: #555;
+      margin-bottom: 1rem;
+      max-width: 800px;
+      line-height: 1.5;
+    }
+    .screen button {
+      background-color: #8e44ad;
+      color: white;
+      border: none;
+      padding: 0.8rem 2rem;
+      font-size: 1.2rem;
+      border-radius: 2rem;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      transition: all 0.2s;
+    }
+    .screen button:hover {
+      background-color: #9b59b6;
+      transform: translateY(-2px);
+    }
+    .instruction-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+      width: 100%;
+      max-width: 900px;
+    }
+    .instruction-box {
+      background-color: rgba(255, 255, 255, 0.7);
+      padding: 1.5rem;
+      border-radius: 1rem;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    }
+    .instruction-box h3 {
+      color: #8e44ad;
+      margin-bottom: 0.5rem;
+    }
+    .instruction-box img {
+      width: 100%;
+      height: auto;
+      margin: 0.5rem 0;
+      border-radius: 0.5rem;
+    }
+    .result-charts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      width: 100%;
+      max-width: 1000px;
+      margin: 1rem 0;
+    }
+    .chart-container {
+      background-color: white;
+      padding: 1rem;
+      border-radius: 1rem;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+    }
+    .personality-traits {
+      margin-top: 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      width: 100%;
+      max-width: 800px;
+    }
+    .trait-card {
+      background-color: white;
+      padding: 1rem;
+      border-radius: 1rem;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+      text-align: center;
+    }
+    .trait-card h3 {
+      color: #8e44ad;
+      margin-bottom: 0.5rem;
+    }
+    .trait-card p {
+      font-size: 0.9rem;
+    }
+    .trait-value {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #34495e;
+      margin: 0.5rem 0;
+    }
+    #instruction-screen {
+      display: flex;
+    }
+    #game-screen {
+      display: none;
+    }
+    #result-screen {
+      display: none;
+    }
+    .game-metrics {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background-color: rgba(255, 255, 255, 0.7);
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      z-index: 15;
+    }
+    @media (max-width: 600px) {
+      .screen h1 {
+        font-size: 1.5rem;
+      }
+      .instruction-container {
+        grid-template-columns: 1fr;
+      }
+      .result-charts {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="p5Canvas"></div>
+  
+  <div class="game-metrics" id="metrics">
+    <div>Flow Rate: 0.0/sec</div>
+    <div>Inventory: 0</div>
+    <div>Bottleneck: None</div>
+    <div>Time: 0s</div>
+  </div>
+  
+  <div class="screen" id="instruction-screen">
+    <h1>WHISPERS IN THE GARDEN</h1>
+    <p>Welcome to an interactive visualization of the Theory of Constraints (I=RT), where ideas flow through paths of varying constraints.</p>
+    
+    <div class="instruction-container">
+      <div class="instruction-box">
+        <h3>Objective</h3>
+        <p>Guide colorful idea particles from the Source to the Destination by manipulating constraint pathways. Optimize the flow to maximize throughput while managing the inventory.</p>
+      </div>
+      <div class="instruction-box">
+        <h3>Path Types</h3>
+        <p><strong>Path 1:</strong> Changes width periodically (rate constraint)</p>
+        <p><strong>Path 2:</strong> Contains gates that open/close (time constraint)</p>
+        <p><strong>Path 3:</strong> Has color filters (inventory type constraint)</p>
+      </div>
+      <div class="instruction-box" id="controls-desktop">
+        <h3>Controls (Desktop)</h3>
+        <p><strong>Mouse Drag:</strong> Reshape any path by clicking and dragging</p>
+        <p><strong>Click on Path:</strong> Temporarily boost path capacity</p>
+        <p><strong>Slider:</strong> Adjust particle generation rate</p>
+      </div>
+      <div class="instruction-box" id="controls-mobile">
+        <h3>Controls (Mobile)</h3>
+        <p><strong>Tap and Drag:</strong> Reshape any path</p>
+        <p><strong>Tap on Path:</strong> Temporarily boost path capacity</p>
+        <p><strong>Slider:</strong> Adjust particle generation rate</p>
+      </div>
+    </div>
+    
+    <p>The simulation will run for 2 minutes. At the end, you'll receive a personalized analysis of your approach to managing constraints!</p>
+    <button id="start-button">Begin Experience</button>
+  </div>
+  
+  <div class="screen" id="game-screen">
+    <!-- Game canvas will be here -->
+  </div>
+  
+  <div class="screen" id="result-screen">
+    <h1>Your Garden Whispers Analysis</h1>
+    <p>Here's how you managed the flow of ideas through constraints:</p>
+    
+    <div class="result-charts">
+      <div class="chart-container">
+        <canvas id="flowChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <canvas id="pathUsageChart"></canvas>
+      </div>
+    </div>
+    
+    <div class="personality-traits">
+      <div class="trait-card">
+        <h3>Adaptability</h3>
+        <div class="trait-value" id="adaptability-value">0%</div>
+        <p>Your ability to respond to changing bottlenecks</p>
+      </div>
+      <div class="trait-card">
+        <h3>Experimentation</h3>
+        <div class="trait-value" id="experimentation-value">0%</div>
+        <p>Your willingness to try different approaches</p>
+      </div>
+      <div class="trait-card">
+        <h3>Efficiency Focus</h3>
+        <div class="trait-value" id="efficiency-value">0%</div>
+        <p>Your attention to maximizing the flow rate</p>
+      </div>
+      <div class="trait-card">
+        <h3>Balance</h3>
+        <div class="trait-value" id="balance-value">0%</div>
+        <p>Your approach to managing multiple paths</p>
+      </div>
+    </div>
+    
+    <button id="replay-button">Play Again</button>
+  </div>
+  
+  <script>
+    // Main game variables
+    let colors = {
+      background: "#f9f7f0",
+      particles: {
+        blue: "#3498db",
+        green: "#2ecc71",
+        red: "#e74c3c",
+        yellow: "#f1c40f"
+      },
+      paths: {
+        base: "#34495e",
+        highlight: "#8e44ad"
+      }
+    };
+    
+    let isMobile;
+    let nodeSize;
+    let particleSize;
+    let pathThickness;
+    let sourcePos;
+    let destPos;
+    
+    let particles = [];
+    let completedParticles = [];
+    let paths = [];
+    let flowSlider = { value: 0.5 };
+    
+    let interactionStart = null;
+    let interactionTarget = null;
+    
+    let flowRate = 0;
+    let systemInventory = 0;
+    let bottleneckPath = null;
+    let lastBottleneck = null;
+    let lastBottleneckInteractions = 0;
+    
+    let startTime;
+    let gameTime = 0;
+    let gameDuration = 120; // 2 minutes
+    let gameActive = false;
+    
+    // Player metrics
+    let playerMetrics = {
+      pathPreference: [0, 0, 0],
+      bottleneckResponsiveness: 0,
+      experimentalIndex: 0,
+      flowRateHistory: [],
+      inventoryHistory: [],
+      pathInteractionHistory: [[], [], []],
+      timepoints: []
+    };
+    
+    let p5Instance = new p5(function(sketch) {
+      sketch.setup = function() {
+        let canvas = sketch.createCanvas(window.innerWidth, window.innerHeight);
+        canvas.parent('p5Canvas');
+        
+        // Setup adaptive layout
+        setupLayout();
+        
+        // Generate background pattern once
+        drawBackgroundPattern();
+        
+        // Initialize metrics
+        particles = [];
+        completedParticles = [];
+      };
+      
+      sketch.draw = function() {
+        if (!gameActive) return;
+        
+        // Update game time
+        gameTime = (sketch.millis() - startTime) / 1000;
+        
+        // Check if game is over
+        if (gameTime >= gameDuration) {
+          endGame();
+          return;
+        }
+        
+        // Clear each frame with slight transparency for trail effect
+        sketch.background(colors.background + '20');
+        
+        // Generate particles based on current flow rate
+        if (sketch.frameCount % Math.max(3, sketch.int(30 / flowSlider.value)) === 0) {
+          let colorKeys = Object.keys(colors.particles);
+          let randomColor = colors.particles[colorKeys[Math.floor(Math.random() * colorKeys.length)]];
+          particles.push(new Particle(randomColor));
+        }
+        
+        // Draw garden elements
+        drawGardenElements();
+        
+        // Update and display paths
+        for (let i = 0; i < paths.length; i++) {
+          paths[i].update();
+          paths[i].display();
+        }
+        
+        // Update particle physics and constraints
+        updateParticles();
+        
+        // Draw particles
+        for (let p of particles) {
+          p.display();
+        }
+        
+        // Draw source and destination nodes
+        drawNode(sourcePos.x, sourcePos.y, nodeSize, true);
+        drawNode(destPos.x, destPos.y, nodeSize, false);
+        
+        // Draw UI elements
+        drawSlider();
+        
+        // Update and display metrics
+        updateScore();
+        
+        // Track player behavior for personality analysis
+        trackPlayerBehavior();
+      };
+      
+      sketch.windowResized = function() {
+        sketch.resizeCanvas(window.innerWidth, window.innerHeight);
+        setupLayout();
+        drawBackgroundPattern();
+      };
+      
+      sketch.mousePressed = function() {
+        if (!gameActive) return;
+        handleStart({ x: sketch.mouseX, y: sketch.mouseY });
+        return false;
+      };
+      
+      sketch.mouseDragged = function() {
+        if (!gameActive) return;
+        handleMove({ x: sketch.mouseX, y: sketch.mouseY });
+        return false;
+      };
+      
+      sketch.mouseReleased = function() {
+        if (!gameActive) return;
+        handleEnd();
+        return false;
+      };
+      
+      sketch.touchStarted = function() {
+        if (!gameActive) return;
+        if (sketch.touches.length > 0) {
+          handleStart({ x: sketch.touches[0].x, y: sketch.touches[0].y });
+        }
+        return false;
+      };
+      
+      sketch.touchMoved = function() {
+        if (!gameActive) return;
+        if (sketch.touches.length > 0) {
+          handleMove({ x: sketch.touches[0].x, y: sketch.touches[0].y });
+        }
+        return false;
+      };
+      
+      sketch.touchEnded = function() {
+        if (!gameActive) return;
+        handleEnd();
+        return false;
+      };
+      
+      function setupLayout() {
+        // Determine if mobile based on screen dimensions
+        isMobile = window.innerWidth < 600;
+        
+        // Set sizes proportionally
+        nodeSize = isMobile ? window.innerWidth * 0.1 : window.innerWidth * 0.06;
+        particleSize = isMobile ? 8 : 12;
+        pathThickness = isMobile ? 15 : 25;
+        
+        // Position elements
+        sourcePos = sketch.createVector(sketch.width * 0.2, sketch.height * 0.2);
+        destPos = sketch.createVector(sketch.width * 0.8, sketch.height * 0.8);
+        
+        // Create touch-friendly slider
+        flowSlider = {
+          x: sketch.width / 2,
+          y: sketch.height - 50,
+          width: sketch.width / 2,
+          height: isMobile ? 40 : 30,
+          value: 0.5
+        };
+        
+        // Create paths with different constraint types
+        paths = [
+          new Path('rate', 1, sourcePos, sketch.createVector(sketch.width*0.5, sketch.height*0.3), destPos),
+          new Path('time', 2, sourcePos, sketch.createVector(sketch.width*0.3, sketch.height*0.7), destPos),
+          new Path('inventory', 3, sourcePos, sketch.createVector(sketch.width*0.7, sketch.height*0.5), destPos)
+        ];
+      }
+      
+      function drawBackgroundPattern() {
+        sketch.loadPixels();
+        for (let x = 0; x < sketch.width; x += 8) {
+          for (let y = 0; y < sketch.height; y += 8) {
+            let noiseVal = sketch.noise(x * 0.01, y * 0.01) * 15;
+            let c = sketch.color(245 + noiseVal, 247 + noiseVal, 240 + noiseVal, 100);
+            
+            for (let i = 0; i < 8; i++) {
+              for (let j = 0; j < 8; j++) {
+                if (x+i < sketch.width && y+j < sketch.height) {
+                  sketch.set(x+i, y+j, c);
+                }
+              }
+            }
+          }
+        }
+        sketch.updatePixels();
+      }
+      
+      function drawGardenElements() {
+        // Draw subtle garden elements in the background
+        sketch.noFill();
+        sketch.stroke(colors.paths.base + '20');
+        sketch.strokeWeight(1);
+        
+        for (let i = 0; i < 10; i++) {
+          let x = sketch.noise(i * 0.5) * sketch.width;
+          let y = sketch.noise(i * 0.5 + 100) * sketch.height;
+          let size = sketch.map(sketch.noise(i), 0, 1, 10, 50);
+          
+          sketch.push();
+          sketch.translate(x, y);
+          sketch.rotate(sketch.noise(i * 0.1) * sketch.TWO_PI);
+          
+          // Draw a simple plant shape
+          for (let j = 0; j < 3; j++) {
+            sketch.beginShape();
+            for (let t = 0; t < 1; t += 0.1) {
+              let angle = j * sketch.TWO_PI / 3 + t * sketch.PI * 0.5;
+              let r = size * (1 - t);
+              let px = r * sketch.cos(angle);
+              let py = r * sketch.sin(angle);
+              sketch.vertex(px, py);
+            }
+            sketch.endShape();
+          }
+          sketch.pop();
+        }
+      }
+      
+      function drawNode(x, y, size, isSource) {
+        // Draw pulsating node
+        let pulseSize = size * (1 + sketch.sin(sketch.frameCount * 0.05) * 0.1);
+        
+        // Glow effect
+        sketch.fill(colors.paths.highlight + '30');
+        sketch.noStroke();
+        sketch.circle(x, y, pulseSize * 1.5);
+        
+        // Main node
+        sketch.fill(isSource ? colors.paths.highlight : colors.paths.base);
+        sketch.circle(x, y, pulseSize);
+        
+        // Inner detail
+        sketch.fill(colors.background);
+        sketch.circle(x, y, pulseSize * 0.5);
+        
+        // Center dot
+        sketch.fill(isSource ? colors.paths.highlight : colors.paths.base);
+        sketch.circle(x, y, pulseSize * 0.2);
+        
+        // Emitter/collector effect
+        if (isSource) {
+          sketch.stroke(colors.paths.highlight + '50');
+          sketch.strokeWeight(1);
+          for (let i = 0; i < 8; i++) {
+            let angle = i * sketch.TWO_PI / 8 + sketch.frameCount * 0.02;
+            let r1 = pulseSize * 0.8;
+            let r2 = pulseSize * 1.2;
+            sketch.line(
+              x + r1 * sketch.cos(angle),
+              y + r1 * sketch.sin(angle),
+              x + r2 * sketch.cos(angle),
+              y + r2 * sketch.sin(angle)
+            );
+          }
+        } else {
+          sketch.stroke(colors.paths.base + '50');
+          sketch.strokeWeight(1);
+          sketch.noFill();
+          for (let i = 0; i < 3; i++) {
+            let pulseRadius = ((sketch.frameCount + i * 10) % 60) / 60;
+            sketch.circle(x, y, pulseSize * 1.5 * pulseRadius);
+          }
+        }
+      }
+      
+      function drawSlider() {
+        // Draw slider background
+        sketch.stroke(colors.paths.base);
+        sketch.strokeWeight(2);
+        sketch.fill(colors.background);
+        sketch.rectMode(sketch.CENTER);
+        sketch.rect(sketch.width/2, sketch.height - 50, sketch.width/2, flowSlider.height, 20);
+        
+        // Draw slider handle
+        let handleX = sketch.map(flowSlider.value, 0, 1, sketch.width/4, sketch.width*3/4);
+        sketch.fill(colors.paths.highlight);
+        sketch.circle(handleX, sketch.height - 50, flowSlider.height * 1.2);
+        
+        // Draw slider label
+        sketch.fill(colors.paths.base);
+        sketch.noStroke();
+        sketch.textAlign(sketch.CENTER, sketch.CENTER);
+        sketch.textSize(isMobile ? 14 : 16);
+        sketch.text("Flow Rate", sketch.width/2, sketch.height - 50 - flowSlider.height);
+      }
+      
+      function updateParticles() {
+        for (let i = particles.length - 1; i >= 0; i--) {
+          let p = particles[i];
+          
+          // Apply gravity
+          p.applyForce(sketch.createVector(0, 0.05));
+          
+          // Find nearest path
+          let nearestPath = null;
+          let minDist = Infinity;
+          let nearestT = 0;
+          
+          for (let path of paths) {
+            let result = path.getNearestPoint(p.position);
+            if (result.distance < minDist) {
+              minDist = result.distance;
+              nearestPath = path;
+              nearestT = result.t;
+            }
+          }
+          
+          // Follow nearest path if close enough
+          if (nearestPath && minDist < pathThickness * 2) {
+            p.currentPath = nearestPath;
+            p.pathPosition = nearestT;
+            
+            // Get target point slightly ahead on path
+            let targetT = Math.min(1, nearestT + 0.05);
+            let target = nearestPath.getPointAt(targetT);
+            
+            // Steer towards target
+            let steer = p5.Vector.sub(target, p.position);
+            steer.limit(0.5);
+            p.applyForce(steer);
+            
+            // Apply constraints based on path type
+            if (p.currentPath) {
+              switch(p.currentPath.type) {
+                case 'rate':
+                  // Path width affects speed
+                  let pathWidth = p.currentPath.getWidthAt(p.pathPosition);
+                  let speedFactor = sketch.map(pathWidth, 0.2, 1, 0.2, 1);
+                  p.velocity.mult(speedFactor);
+                  break;
+                  
+                case 'time':
+                  // Gates block particles periodically
+                  let isBlocked = false;
+                  for (let gate of p.currentPath.gates) {
+                    if (Math.abs(p.pathPosition - gate.position) < 0.05 && !gate.isOpen) {
+                      isBlocked = true;
+                      break;
+                    }
+                  }
+                  
+                  if (isBlocked) {
+                    p.velocity.mult(0.1);
+                  }
+                  break;
+                  
+                case 'inventory':
+                  // Color filters only allow matching particles
+                  let currentFilter = p.currentPath.getFilterAt(p.pathPosition);
+                  if (currentFilter && p.color !== currentFilter) {
+                    // Particle blocked by filter
+                    p.velocity.mult(0.1);
+                  }
+                  break;
+              }
+            }
+          }
+          
+          // Update physics
+          p.velocity.add(p.acceleration);
+          p.velocity.limit(p.maxSpeed);
+          p.position.add(p.velocity);
+          p.acceleration.mult(0);
+          
+          // Remove particles that reach destination
+          if (p5.Vector.dist(p.position, destPos) < nodeSize/2) {
+            p.currentPath.particlesPassed++;
+            p.currentPath.particlesPassedByColor[p.color]++;
+            completedParticles.push(p);
+            particles.splice(i, 1);
+          }
+          
+          // Remove particles that go off screen
+          if (p.position.x < -50 || p.position.x > sketch.width + 50 || 
+              p.position.y < -50 || p.position.y > sketch.height + 50) {
+            particles.splice(i, 1);
+          }
+        }
+      }
+      
+      function updateScore() {
+        // I=RT representation
+        let inventory = particles.length; // Current particles in system
+        let totalTime = gameTime > 0 ? gameTime : 0.001;
+        let rate = completedParticles.length / totalTime;
+        
+        // Update metrics display
+        flowRate = rate.toFixed(1);
+        systemInventory = inventory;
+        
+        // Calculate bottleneck
+        let pathThroughputs = [];
+        for (let path of paths) {
+          pathThroughputs.push({
+            id: path.id,
+            throughput: path.particlesPassed / totalTime
+          });
+        }
+        
+        let minThroughput = Infinity;
+        let bottleneckId = 0;
+        
+        for (let pt of pathThroughputs) {
+          if (pt.throughput < minThroughput && pt.throughput > 0) {
+            minThroughput = pt.throughput;
+            bottleneckId = pt.id;
+          }
+        }
+        
+        bottleneckPath = bottleneckId;
+        
+        // Update metrics display
+        document.getElementById('metrics').innerHTML = `
+          <div>Flow Rate: ${flowRate}/sec</div>
+          <div>Inventory: ${systemInventory}</div>
+          <div>Bottleneck: ${bottleneckPath ? 'Path ' + bottleneckPath : 'None'}</div>
+          <div>Time: ${Math.floor(gameTime)}s / ${gameDuration}s</div>
+        `;
+      }
+      
+      function trackPlayerBehavior() {
+        // Only update metrics periodically
+        if (sketch.frameCount % 30 === 0) { // Update every half second
+          // Track which paths player interacts with most
+          playerMetrics.pathPreference = paths.map(p => p.interactionCount);
+          
+          // Track response to bottlenecks
+          if (lastBottleneck !== bottleneckPath && bottleneckPath !== 0 &&
+              lastBottleneck !== null && lastBottleneck !== 0) {
+            if (paths[bottleneckPath-1].interactionCount > lastBottleneckInteractions) {
+              playerMetrics.bottleneckResponsiveness++;
+            }
+          }
+          
+          // Store history data for charts
+          playerMetrics.flowRateHistory.push(parseFloat(flowRate));
+          playerMetrics.inventoryHistory.push(systemInventory);
+          playerMetrics.timepoints.push(gameTime);
+          
+          for (let i = 0; i < paths.length; i++) {
+            playerMetrics.pathInteractionHistory[i].push(paths[i].interactionCount);
+          }
+          
+          lastBottleneck = bottleneckPath;
+          if (bottleneckPath > 0) {
+            lastBottleneckInteractions = paths[bottleneckPath-1].interactionCount;
+          }
+        }
+      }
+      
+      // Path class
+      function Path(type, id, start, control, end) {
+        this.type = type;
+        this.id = id;
+        this.start = start.copy();
+        this.control = control.copy();
+        this.end = end.copy();
+        this.thickness = pathThickness;
+        this.baseWidth = 1.0;
+        this.interactionCount = 0;
+        this.particlesPassed = 0;
+        this.particlesPassedByColor = {
+          [colors.particles.blue]: 0,
+          [colors.particles.green]: 0,
+          [colors.particles.red]: 0,
+          [colors.particles.yellow]: 0
+        };
+        this.boostTimer = 0;
+        
+        // Create gates for time constraint path
+        this.gates = [];
+        if (type === 'time') {
+          for (let i = 0; i < 5; i++) {
+            this.gates.push({
+              position: 0.1 + i * 0.2,
+              isOpen: true,
+              phase: i * 0.5
+            });
+          }
+        }
+        
+        // Create color filters for inventory constraint path
+        this.filters = [];
+        if (type === 'inventory') {
+          let colorKeys = Object.keys(colors.particles);
+          for (let i = 0; i < 4; i++) {
+            this.filters.push({
+              position: 0.2 + i * 0.2,
+              color: colors.particles[colorKeys[i % colorKeys.length]]
+            });
+          }
+        }
+        
+        this.update = function() {
+          // Update gates for time constraint
+          if (this.type === 'time') {
+            for (let gate of this.gates) {
+              gate.isOpen = sketch.sin(sketch.frameCount * 0.05 + gate.phase) > 0;
+            }
+          }
+          
+          // Update boost timer
+          if (this.boostTimer > 0) {
+            this.boostTimer--;
+          }
+        };
+        
+        this.display = function() {
+          // Calculate points along the path
+          let points = [];
+          for (let t = 0; t <= 1; t += 0.05) {
+            points.push(this.getPointAt(t));
+          }
+          
+          // Draw base path
+          sketch.strokeWeight(this.thickness);
+          sketch.stroke(this.boostTimer > 0 ? colors.paths.highlight : colors.paths.base);
+          sketch.noFill();
+          sketch.beginShape();
+          for (let p of points) {
+            sketch.vertex(p.x, p.y);
+          }
+          sketch.endShape();
+          
+          // Draw constraint visualization based on type
+          switch(this.type) {
+            case 'rate':
+              // Variable width visualization
+              let segments = 10;
+              for (let i = 0; i < segments; i++) {
+                let t1 = i / segments;
+                let t2 = (i + 1) / segments;
+                
+                let p1 = this.getPointAt(t1);
+                let p2 = this.getPointAt(t2);
+                
+                // Width varies along path
+                let segWidth = this.
